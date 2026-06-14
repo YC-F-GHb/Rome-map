@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>米兰必去景点地图（OpenStreetMap底图版）</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        /* ===== 设计令牌 ===== */
+        :root {
+            --rosso: #c0392b;
+            --rosso-dark: #962d22;
+            --arancio: #ff6b35;
+            --oro: #d4a853;
+            --sfondo: #faf8f5;
+            --testo: #2c2c2c;
+            --testo-light: #6b6b6b;
+            --bianco: #ffffff;
+            --ombra: 0 4px 24px rgba(30, 20, 10, 0.12);
+            --ombra-light: 0 2px 12px rgba(30, 20, 10, 0.08);
+            --radius: 14px;
+            --radius-sm: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Noto Serif SC', 'Playfair Display', Georgia, 'PingFang SC', 'Microsoft YaHei', serif;
+            background: var(--sfondo);
+            color: var(--testo);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100%;
+            filter: saturate(1.02) contrast(1.02);
+        }
+
+        /* ===== 顶部标题栏 ===== */
+        .title-overlay {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            padding: 14px 32px 12px;
+            border-radius: 50px;
+            box-shadow: var(--ombra);
+            z-index: 1000;
+            text-align: center;
+            overflow: hidden;
+            border: 1px solid rgba(212, 168, 83, 0.25);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            max-width: 92vw;
+        }
+        .title-overlay:hover {
+            box-shadow: 0 6px 32px rgba(30, 20, 10, 0.18);
+            transform: translateX(-50%) translateY(-1px);
+        }
+        .title-overlay h1 {
+            font-family: 'Playfair Display', 'Noto Serif SC', serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--rosso);
+            margin-bottom: 3px;
+            letter-spacing: 0.5px;
+        }
+        .title-overlay p {
+            font-size: 12px;
+            color: var(--testo-light);
+            font-style: italic;
+            font-family: 'Playfair Display', serif;
+            letter-spacing: 0.5px;
+        }
+
+        /* 三按钮收缩态：信息、工具、筛选 */
+        .title-overlay.collapsed,
+        .draw-toolbar.collapsed,
+        .legend.collapsed {
+            position: fixed;
+            left: 24px;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bianco);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(212, 168, 83, 0.35);
+            box-shadow: var(--ombra);
+            transform: translate(0, 0);
+            overflow: hidden;
+            z-index: 1000;
+        }
+        .title-overlay.collapsed { top: calc(50% - 66px); }
+        .draw-toolbar.collapsed { top: 50%; transform: translateY(-50%); }
+        .legend.collapsed { top: calc(50% + 66px); }
+
+        .title-overlay.collapsed h1,
+        .title-overlay.collapsed p,
+        .draw-toolbar.collapsed .tool-row,
+        .legend.collapsed h4,
+        .legend.collapsed .legend-item { display: none; }
+
+        .title-overlay.collapsed::after,
+        .draw-toolbar.collapsed::after,
+        .legend.collapsed::after {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--rosso);
+            line-height: 1;
+            font-family: 'Noto Serif SC', serif;
+            letter-spacing: 0.5px;
+        }
+        .title-overlay.collapsed::after { content: '信息'; }
+        .draw-toolbar.collapsed::after { content: '工具'; }
+        .legend.collapsed::after { content: '筛选'; }
+
+        .title-overlay.collapsed:hover,
+        .draw-toolbar.collapsed:hover,
+        .legend.collapsed:hover {
+            transform: translateY(0) scale(1.08);
+            box-shadow: 0 6px 20px rgba(192, 57, 43, 0.22);
+        }
+        .title-overlay.collapsed:hover { transform: translateY(0) scale(1.08); }
+        .draw-toolbar.collapsed:hover { transform: translateY(-50%) scale(1.08) !important; }
+        .legend.collapsed:hover { transform: translateY(0) scale(1.08); }
+
+        /* ===== 左侧工具栏（展开） ===== */
+        .draw-toolbar {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            background: var(--bianco);
+            padding: 14px 14px 12px;
+            border-radius: var(--radius);
+            box-shadow: var(--ombra);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 13px;
+            overflow: hidden;
+            border: 1px solid rgba(212, 168, 83, 0.2);
+        }
+        .draw-toolbar .tool-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .draw-toolbar label {
+            font-size: 11px;
+            color: var(--testo-light);
+            white-space: nowrap;
+            letter-spacing: 0.5px;
+        }
+        .draw-btn {
+            width: 34px;
+            height: 34px;
+            border: 1.5px solid rgba(212, 168, 83, 0.35);
+            border-radius: var(--radius-sm);
+            background: var(--bianco);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s ease;
+        }
+        .draw-btn:hover {
+            border-color: var(--oro);
+            background: #fefbf5;
+            transform: translateY(-1px);
+        }
+        .draw-btn.active {
+            border-color: var(--rosso);
+            background: #fdf3f2;
+            box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.1);
+        }
+        .draw-btn.danger { color: var(--rosso); }
+        .draw-color {
+            width: 28px;
+            height: 28px;
+            border: 1.5px solid rgba(212, 168, 83, 0.35);
+            border-radius: 50%;
+            cursor: pointer;
+            padding: 0;
+            transition: all 0.2s ease;
+        }
+        .draw-color:hover { border-color: var(--oro); }
+        .draw-color.active {
+            border-color: var(--testo);
+            box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--oro);
+        }
+        .draw-size {
+            width: 60px;
+            height: 28px;
+            border: 1px solid rgba(212, 168, 83, 0.35);
+            border-radius: 6px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--testo);
+            background: var(--bianco);
+        }
+        .draw-size:focus { outline: 2px solid rgba(212, 168, 83, 0.4); outline-offset: 1px; }
+
+        /* ===== 图例面板（展开） ===== */
+        .legend {
+            background: var(--bianco);
+            padding: 14px 18px 12px;
+            border-radius: var(--radius);
+            box-shadow: var(--ombra);
+            line-height: 1.9;
+            font-size: 13px;
+            max-width: 260px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid rgba(212, 168, 83, 0.2);
+        }
+        .legend h4 {
+            margin-bottom: 8px;
+            color: var(--testo);
+            font-size: 14px;
+            font-weight: 700;
+            padding-bottom: 6px;
+            border-bottom: 2px solid transparent;
+            border-image: linear-gradient(90deg, var(--rosso), var(--oro)) 1;
+            letter-spacing: 0.5px;
+            font-family: 'Noto Serif SC', serif;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+            transition: opacity 0.2s ease;
+        }
+        .legend-item:hover { opacity: 0.75; }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 1px 3px rgba(0, 0, 0, 0.15);
+        }
+
+        /* ===== 弹窗（景点信息） ===== */
+        .popup-title {
+            font-family: 'Playfair Display', 'Noto Serif SC', serif;
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--rosso);
+            margin-bottom: 6px;
+            letter-spacing: 0.3px;
+        }
+        .popup-desc {
+            font-size: 13px;
+            color: var(--testo);
+            line-height: 1.7;
+        }
+        .popup-type {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: white;
+            margin-top: 6px;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        .leaflet-popup-content {
+            margin: 14px 18px;
+            width: 260px !important;
+        }
+        .leaflet-popup-content-wrapper {
+            border-radius: var(--radius);
+            box-shadow: var(--ombra);
+            border: 1px solid rgba(212, 168, 83, 0.25);
+            background: var(--bianco);
+        }
+        .leaflet-popup-content-wrapper,
+        .leaflet-popup-tip {
+            background: var(--bianco);
+        }
+        .leaflet-popup-tip {
+            box-shadow: 1px 1px 0 rgba(212, 168, 83, 0.15);
+        }
+
+        /* ===== 绘图画布 ===== */
+        #drawCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 450;
+            pointer-events: none;
+        }
+        #drawCanvas.active {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+
+        /* ===== 模式提示条 ===== */
+        .mode-indicator {
+            position: fixed;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, rgba(192, 57, 43, 0.95), rgba(255, 107, 53, 0.95));
+            color: white;
+            padding: 8px 20px;
+            border-radius: 24px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 1001;
+            display: none;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 16px rgba(192, 57, 43, 0.35);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 4px 16px rgba(192, 57, 43, 0.35); }
+            50% { box-shadow: 0 4px 24px rgba(192, 57, 43, 0.55); }
+        }
+
+        /* ===== 地名标签 ===== */
+        .name-label {
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--testo);
+            border: 1px solid rgba(212, 168, 83, 0.4);
+            border-radius: 8px;
+            padding: 3px 10px;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(30, 20, 10, 0.12);
+            line-height: 1.5;
+        }
+        .name-label.hidden-label { display: none !important; }
+        .leaflet-tooltip-top.name-label:before,
+        .leaflet-tooltip-bottom.name-label:before,
+        .leaflet-tooltip-left.name-label:before,
+        .leaflet-tooltip-right.name-label:before {
+            display: none;
+        }
+        .leaflet-tooltip.name-label {
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            padding: 0;
+        }
+        .leaflet-tooltip.name-label .name-label-inner {
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--testo);
+            border: 1px solid rgba(212, 168, 83, 0.4);
+            border-radius: 8px;
+            padding: 3px 10px;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(30, 20, 10, 0.12);
+            line-height: 1.5;
+            font-family: 'Noto Serif SC', serif;
+        }
+
+        /* ===== 自定义标记弹窗 ===== */
+        .custom-marker-modal {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(30, 20, 10, 0.55);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.25s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .custom-marker-modal.active { display: flex; }
+        .modal-content {
+            background: var(--bianco);
+            padding: 24px;
+            border-radius: var(--radius);
+            width: 340px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(212, 168, 83, 0.3);
+            animation: slideUp 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .modal-content h3 {
+            margin-bottom: 16px;
+            color: var(--rosso);
+            font-size: 17px;
+            font-family: 'Playfair Display', 'Noto Serif SC', serif;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .modal-content input,
+        .modal-content textarea {
+            width: 100%;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            border: 1.5px solid rgba(212, 168, 83, 0.3);
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: inherit;
+            color: var(--testo);
+            background: #fdfbf7;
+            transition: all 0.2s ease;
+        }
+        .modal-content input:focus,
+        .modal-content textarea:focus {
+            outline: none;
+            border-color: var(--oro);
+            background: var(--bianco);
+            box-shadow: 0 0 0 3px rgba(212, 168, 83, 0.15);
+        }
+        .modal-content textarea { resize: vertical; min-height: 72px; }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 14px;
+        }
+        .modal-btn {
+            padding: 9px 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            font-family: inherit;
+            letter-spacing: 0.5px;
+        }
+        .modal-btn-primary {
+            background: linear-gradient(135deg, var(--rosso), var(--arancio));
+            color: white;
+        }
+        .modal-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(192, 57, 43, 0.35); }
+        .modal-btn-secondary { background: #f0ebe3; color: var(--testo); }
+        .modal-btn-secondary:hover { background: #e8e2d8; }
+        .modal-btn-danger { background: var(--rosso-dark); color: white; }
+        .modal-btn-danger:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(150, 45, 34, 0.35); }
+
+        /* ===== Leaflet 缩放控件美化 ===== */
+        .leaflet-control-zoom {
+            margin-top: 20px !important;
+            margin-right: 14px !important;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--ombra) !important;
+            border: 1px solid rgba(212, 168, 83, 0.25) !important;
+            background: var(--bianco) !important;
+        }
+        .leaflet-control-zoom a {
+            width: 34px !important;
+            height: 34px !important;
+            line-height: 32px !important;
+            font-size: 18px !important;
+            color: var(--testo) !important;
+            background: var(--bianco) !important;
+            border: none !important;
+            font-weight: 700 !important;
+            font-family: 'Playfair Display', serif;
+            transition: all 0.15s ease;
+        }
+        .leaflet-control-zoom a:hover {
+            background: #fefbf5 !important;
+            color: var(--rosso) !important;
+        }
+        .leaflet-control-attribution {
+            background: rgba(255, 255, 255, 0.85) !important;
+            padding: 4px 10px !important;
+            border-radius: 8px 0 0 0;
+            font-size: 10px !important;
+            color: var(--testo-light) !important;
+        }
+        .leaflet-control-attribution a { color: var(--rosso) !important; }
+
+        /* ===== 圆形标记点 ===== */
+        .leaflet-interactive {
+            transition: transform 0.15s ease;
+        }
+
+        /* ============================================================
+           iPhone 14 (390 x 844) 响应式适配
+           ============================================================ */
+        @media (max-width: 430px) {
+            .title-overlay {
+                padding: 10px 20px 8px;
+                border-radius: 40px;
+                top: 12px;
+                max-width: calc(100vw - 24px);
+            }
+            .title-overlay h1 { font-size: 16px; margin-bottom: 2px; }
+            .title-overlay p { font-size: 10px; line-height: 1.3; max-width: 80vw; }
+            .title-overlay.collapsed { width: 42px; height: 42px; top: calc(50% - 56px); }
+
+            .draw-toolbar.collapsed { width: 42px; height: 42px; top: 50%; }
+            .legend.collapsed { width: 42px; height: 42px; top: calc(50% + 56px); }
+
+            .draw-toolbar {
+                top: auto; bottom: 88px; left: 10px;
+                padding: 10px; gap: 6px; border-radius: 12px;
+                opacity: 0.96; max-width: 180px;
+            }
+            .draw-toolbar .tool-row { gap: 6px; }
+            .draw-btn { width: 32px; height: 32px; font-size: 14px; border-radius: 6px; }
+            .draw-color { width: 24px; height: 24px; }
+            .draw-size { width: 50px; height: 24px; font-size: 11px; }
+            .draw-toolbar label { font-size: 10px; }
+
+            .legend {
+                padding: 10px 12px 8px;
+                font-size: 12px;
+                line-height: 1.7;
+                max-width: 180px;
+                border-radius: 12px;
+            }
+            .legend h4 { font-size: 13px; margin-bottom: 6px; padding-bottom: 5px; }
+            .legend-color { width: 10px; height: 10px; }
+            .legend-item { gap: 6px; margin: 3px 0; }
+
+            .mode-indicator { top: 70px; padding: 6px 14px; font-size: 11px; border-radius: 18px; max-width: 90vw; }
+
+            .modal-content {
+                width: calc(100vw - 40px); max-width: 340px; padding: 18px;
+                margin: 0 16px; border-radius: 14px;
+            }
+            .modal-content h3 { font-size: 16px; margin-bottom: 12px; }
+            .modal-content input, .modal-content textarea { padding: 9px 11px; font-size: 13px; }
+            .modal-btn { padding: 8px 14px; font-size: 12px; }
+            .modal-buttons { gap: 8px; }
+
+            .leaflet-popup-content {
+                margin: 12px 14px; width: calc(100vw - 80px) !important; max-width: 260px !important;
+            }
+            .popup-title { font-size: 15px; }
+            .popup-desc { font-size: 12px; line-height: 1.7; }
+
+            .leaflet-tooltip.name-label .name-label-inner,
+            .name-label { padding: 2px 8px; font-size: 13px; border-radius: 6px; }
+
+            .leaflet-control-zoom { margin-top: 80px !important; margin-right: 10px !important; }
+            .leaflet-control-zoom a { width: 32px !important; height: 32px !important; line-height: 30px !important; font-size: 16px !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="title-overlay">
+        <h1>⚽ 米兰必去景点地图</h1>
+        <p>OpenStreetMap底图 | 包含米兰必去景点、教堂、广场、博物馆、影视取景地及建筑大师作品</p>
+    </div>
+    <div class="mode-indicator" id="modeIndicator">✏️ 绘图模式 - 点击工具栏关闭后恢复地图模式</div>
+
+    <!-- 划线工具栏 -->
+    <div class="draw-toolbar" id="drawToolbar">
+        <div class="tool-row">
+            <button class="draw-btn active" id="btnPen" title="画笔" onclick="setTool('pen')">✏️</button>
+            <button class="draw-btn" id="btnEraser" title="橡皮擦" onclick="setTool('eraser')">🧹</button>
+        </div>
+        <div class="tool-row">
+            <label>颜色</label>
+            <input type="color" class="draw-color" id="drawColor" value="#e74c3c" onchange="drawSettings.color=this.value">
+        </div>
+        <div class="tool-row">
+            <label>粗细</label>
+            <input type="range" class="draw-size" id="drawSize" min="1" max="20" value="3" oninput="drawSettings.size=this.value; document.getElementById('sizeLabel').textContent=this.value+'px'">
+            <span id="sizeLabel" style="font-size:11px;color:#666;min-width:28px;">3px</span>
+        </div>
+        <div class="tool-row">
+            <button class="draw-btn" title="撤销" onclick="undoDraw()">↩️</button>
+            <button class="draw-btn danger" title="清除全部" onclick="clearDraw()">🗑️</button>
+        </div>
+        <div class="tool-row">
+            <button class="draw-btn" id="btnToggleDraw" title="开关绘图模式" onclick="toggleDrawMode()" style="width:auto;padding:0 8px;font-size:12px;">✏️ 绘图</button>
+        </div>
+        <div style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;"></div>
+        <div class="tool-row">
+            <button class="draw-btn" id="btnAddMarker" title="添加自定义标记" onclick="toggleAddMarkerMode()" style="width:auto;padding:0 8px;font-size:12px;">📍 添加标记</button>
+        </div>
+        <div style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;"></div>
+        <div class="tool-row">
+            <button class="draw-btn" id="btnRoute" title="搜索路径" onclick="toggleRouteMode()" style="width:auto;padding:0 8px;font-size:12px;">🛤️ 搜索路径</button>
+        </div>
+    </div>
+
+    <div id="map">
+        <canvas id="drawCanvas"></canvas>
+    </div>
+
+    <!-- 自定义标记弹窗 -->
+    <div class="custom-marker-modal" id="markerModal">
+        <div class="modal-content">
+            <h3>📍 添加自定义标记</h3>
+            <input type="text" id="markerName" placeholder="标记名称（如：我的酒店）">
+            <textarea id="markerDesc" placeholder="描述（可选）"></textarea>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-secondary" onclick="closeMarkerModal()">取消</button>
+                <button class="modal-btn modal-btn-primary" onclick="saveCustomMarker()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 统一编辑标记弹窗 -->
+    <div class="custom-marker-modal" id="editMarkerModal">
+        <div class="modal-content">
+            <h3>✏️ 编辑标记</h3>
+            <input type="text" id="editMarkerName" placeholder="标记名称">
+            <textarea id="editMarkerDesc" placeholder="描述（可选）"></textarea>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <label style="font-size:13px;color:#666;">标记颜色</label>
+                <input type="color" id="editMarkerColor" value="#e74c3c" style="width:40px;height:30px;border:1px solid #ddd;border-radius:4px;cursor:pointer;">
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-danger" onclick="deleteAnyMarker()">🗑️ 删除</button>
+                <button class="modal-btn modal-btn-secondary" onclick="closeEditMarkerModal()">取消</button>
+                <button class="modal-btn modal-btn-primary" onclick="updateAnyMarker()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化地图
+        const map = L.map('map', {
+            center: [45.4642, 9.19],
+            zoom: 13,
+            zoomControl: false
+        });
+
+        // 底图源：仅使用 OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+            subdomains: 'abc'
+        }).addTo(map);
+
+        // 定义颜色
+        const colors = {
+            ancient: '#e74c3c',
+            church: '#9b59b6',
+            square: '#f39c12',
+            museum: '#3498db',
+            modern: '#2ecc71',
+            district: '#1abc9c',
+            film: '#e91e63',
+            master: '#ff6b35'
+        };
+
+        // 所有景点数据
+        const attractions = [
+            // 地标建筑
+            { name: "米兰大教堂 (Duomo)", lat: 45.4642, lng: 9.1900, type: "ancient", desc: "世界第二大教堂，哥特式建筑巅峰，拿破仑加冕地" },
+            { name: "埃马努埃莱二世长廊", lat: 45.4658, lng: 9.1895, type: "ancient", desc: "世界最古老购物中心，玻璃穹顶新古典主义建筑" },
+            { name: "斯福尔扎城堡", lat: 45.4705, lng: 9.1793, type: "ancient", desc: "文艺复兴时期城堡，达·芬奇参与设计防御系统" },
+            { name: "和平门 (Arco della Pace)", lat: 45.4758, lng: 9.1715, type: "ancient", desc: "新古典主义凯旋门，拿破仑时期建造" },
+            { name: "斯卡拉歌剧院", lat: 45.4675, lng: 9.1893, type: "ancient", desc: "世界最著名歌剧院之一，歌剧圣地" },
+            // 教堂
+            { name: "圣玛丽亚感恩教堂", lat: 45.4659, lng: 9.1510, type: "church", desc: "达·芬奇《最后的晚餐》壁画所在地" },
+            { name: "圣安布罗斯圣殿", lat: 45.4620, lng: 9.1755, type: "church", desc: "米兰守护神圣安布罗斯的主教座堂，早期基督教建筑" },
+            { name: "圣洛伦佐柱廊", lat: 45.4585, lng: 9.1815, type: "church", desc: "古罗马时期教堂，16根科林斯柱廊" },
+            { name: "圣西罗大教堂", lat: 45.4645, lng: 9.1960, type: "church", desc: "新哥特式教堂，米兰东部地标" },
+            // 广场
+            { name: "大教堂广场 (Piazza Duomo)", lat: 45.4640, lng: 9.1905, type: "square", desc: "米兰城市心脏，大教堂前广场" },
+            { name: "斯卡拉广场", lat: 45.4665, lng: 9.1890, type: "square", desc: "歌剧院前广场，达·芬奇雕像" },
+            { name: "Cordusio广场", lat: 45.4648, lng: 9.1865, type: "square", desc: "金融区中心，新艺术风格建筑" },
+            { name: "加里波第门", lat: 45.4790, lng: 9.1875, type: "square", desc: "新门区现代建筑聚集地" },
+            // 博物馆
+            { name: "布雷拉美术馆", lat: 45.4715, lng: 9.1880, type: "museum", desc: "意大利最重要美术馆之一，拉斐尔、卡拉瓦乔杰作" },
+            { name: "二十世纪博物馆", lat: 45.4635, lng: 9.1895, type: "museum", desc: "现代艺术收藏，俯瞰大教堂广场" },
+            { name: "达·芬奇国家科技博物馆", lat: 45.4620, lng: 9.1705, type: "museum", desc: "达·芬奇手稿和机械模型，世界最大科技博物馆之一" },
+            { name: "普拉达基金会", lat: 45.4430, lng: 9.2050, type: "museum", desc: "当代艺术空间，雷姆·库哈斯设计" },
+            { name: "安布罗修图书馆", lat: 45.4630, lng: 9.1850, type: "museum", desc: "达·芬奇《大西洋古抄本》收藏地" },
+            // 近现代建筑
+            { name: "垂直森林 (Bosco Verticale)", lat: 45.4850, lng: 9.1900, type: "modern", desc: "斯特凡诺·博埃里设计，世界最著名绿色建筑" },
+            { name: "米兰新会展中心", lat: 45.5200, lng: 9.2100, type: "modern", desc: "Fuksas设计，巨大玻璃和钢结构" },
+            { name: "CityLife商业区", lat: 45.4780, lng: 9.1550, type: "modern", desc: "扎哈·哈迪德、丹尼尔·里伯斯金、矶崎新设计" },
+            { name: "倍耐力大厦 (Pirelli Tower)", lat: 45.4840, lng: 9.2020, type: "modern", desc: "吉奥·庞蒂设计，意大利现代主义建筑里程碑" },
+            // 街区
+            { name: "纳维利运河区 (Navigli)", lat: 45.4520, lng: 9.1750, type: "district", desc: "达·芬奇设计的运河，夜生活和古董市场" },
+            { name: "布雷拉区 (Brera)", lat: 45.4710, lng: 9.1870, type: "district", desc: "艺术区，画廊、古董店和时尚餐厅" },
+            // 影视取景地
+            { name: "米兰大教堂", lat: 45.4642, lng: 9.1900, type: "film", desc: "🎬《碟中谍7》(2023) - 追车戏场景" },
+            { name: "埃马努埃莱二世长廊", lat: 45.4658, lng: 9.1895, type: "film", desc: "🎬《碟中谍7》- 长廊追逐" },
+            { name: "斯福尔扎城堡", lat: 45.4705, lng: 9.1793, type: "film", desc: "🎬《碟中谍7》- 城堡场景" },
+            { name: "科莫湖 (近米兰)", lat: 45.8200, lng: 9.0850, type: "film", desc: "🎬《007：皇家赌场》(2006) - 邦德疗养院" },
+            { name: "纳维利运河", lat: 45.4520, lng: 9.1750, type: "film", desc: "🎬《请以你的名字呼唤我》(2017) - 结尾场景" },
+            { name: "斯卡拉歌剧院", lat: 45.4675, lng: 9.1893, type: "film", desc: "🎬《碟中谍7》- 歌剧院场景" },
+            { name: "蒙特拿破仑大街", lat: 45.4680, lng: 9.1950, type: "film", desc: "🎬《穿普拉达的女王》- 时尚购物街" },
+            { name: "圣玛丽亚感恩教堂", lat: 45.4659, lng: 9.1510, type: "film", desc: "🎬《达·芬奇密码》- 《最后的晚餐》" },
+            { name: "加里波第门", lat: 45.4790, lng: 9.1875, type: "film", desc: "🎬《碟中谍7》- 现代区追车" },
+            { name: "CityLife", lat: 45.4780, lng: 9.1550, type: "film", desc: "🎬《碟中谍7》- 摩天大楼场景" },
+            // 建筑大师作品
+            { name: "垂直森林", lat: 45.4850, lng: 9.1900, type: "master", desc: "⭐ 斯特凡诺·博埃里设计，世界上第一座垂直森林" },
+            { name: "CityLife 扭曲大厦", lat: 45.4785, lng: 9.1540, type: "master", desc: "⭐ 扎哈·哈迪德设计，流线型玻璃塔楼" },
+            { name: "CityLife 直大厦", lat: 45.4775, lng: 9.1560, type: "master", desc: "⭐ 丹尼尔·里伯斯金设计，锐角几何造型" },
+            { name: "普拉达基金会", lat: 45.4430, lng: 9.2050, type: "master", desc: "⭐ 雷姆·库哈斯/OMA设计，工业风当代艺术空间" },
+            { name: "倍耐力大厦", lat: 45.4840, lng: 9.2020, type: "master", desc: "⭐ 吉奥·庞蒂设计，意大利现代主义里程碑" },
+            { name: "米兰三年展中心", lat: 45.4720, lng: 9.1735, type: "master", desc: "⭐ 乔瓦尼·穆齐奥设计，意大利理性主义建筑" },
+        ];
+
+        const typeNames = {
+            ancient: "古典遗迹",
+            church: "教堂",
+            square: "广场喷泉",
+            museum: "博物馆",
+            modern: "近现代建筑",
+            district: "特色街区",
+            film: "🎬 影视取景地",
+            master: "⭐ 建筑大师作品"
+        };
+
+        // 筛选状态
+        const filterState = {
+            ancient: true,
+            church: true,
+            square: true,
+            museum: true,
+            modern: true,
+            district: true,
+            film: true,
+            master: true
+        };
+
+        // 存储所有标记对象（统一管理）
+        const allMarkers = []; // { marker, name, desc, type, color, isCustom }
+        const markerLayers = {};
+
+        // ==================== 影视取景地去重 & 信息合并 ====================
+        function normalizeKey(name) {
+            return name.replace(/\s*\([^)]+\)/g, '').replace(/[\s·•\-]/g, '').trim().slice(0, 4);
+        }
+        const filmByName = {};
+        const filmByCoord = {};
+        attractions.forEach(a => {
+            if (a.type === 'film') {
+                filmByName[normalizeKey(a.name)] = a.desc;
+                filmByCoord[a.lat.toFixed(3) + ',' + a.lng.toFixed(3)] = a.desc;
+            }
+        });
+        const mergedFilmNames = new Set();
+        attractions.forEach((a, idx) => {
+            if (a.type === 'film') {
+                const nameKey = normalizeKey(a.name);
+                const coordKey = a.lat.toFixed(3) + ',' + a.lng.toFixed(3);
+                let absorbed = false;
+                for (let j = 0; j < attractions.length; j++) {
+                    if (j === idx) continue;
+                    const b = attractions[j];
+                    if (b.type === 'film') continue;
+                    if (normalizeKey(b.name) === nameKey ||
+                        (b.lat.toFixed(3) === a.lat.toFixed(3) && b.lng.toFixed(3) === a.lng.toFixed(3))) {
+                        absorbed = true; break;
+                    }
+                }
+                if (absorbed) mergedFilmNames.add(nameKey + '|' + coordKey);
+            }
+        });
+        function findFilmInfoFor(attr) {
+            const nameKey = normalizeKey(attr.name);
+            const coordKey = attr.lat.toFixed(3) + ',' + attr.lng.toFixed(3);
+            if (filmByName[nameKey]) return filmByName[nameKey];
+            if (filmByCoord[coordKey]) return filmByCoord[coordKey];
+            return null;
+        }
+
+        // 同一位置标记偏移计数器
+        const posCounter = {};
+
+        // 添加标记
+        attractions.forEach((attr, index) => {
+            // 跳过已被主类型景点吸收的 film 标记
+            if (attr.type === 'film') {
+                const key = normalizeKey(attr.name) + '|' + attr.lat.toFixed(3) + ',' + attr.lng.toFixed(3);
+                if (mergedFilmNames.has(key)) return;
+            }
+
+            // 解决重叠：同一位置的标记做微小偏移
+            const posKey = attr.lat.toFixed(4) + ',' + attr.lng.toFixed(4);
+            if (!posCounter[posKey]) posCounter[posKey] = 0;
+            const offsetIndex = posCounter[posKey]++;
+            const offsetLat = (offsetIndex % 3 - 1) * 0.00015;
+            const offsetLng = (Math.floor(offsetIndex / 3) - 0.5) * 0.0002;
+            const finalLat = attr.lat + offsetLat;
+            const finalLng = attr.lng + offsetLng;
+
+            // 查找是否有合并的影视信息
+            const filmInfo = (attr.type !== 'film') ? findFilmInfoFor(attr) : null;
+
+            const markerColor = colors[attr.type];
+            const marker = L.circleMarker([finalLat, finalLng], {
+                radius: attr.type === 'film' ? 12 : 10,
+                fillColor: markerColor,
+                color: '#fff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.85
+            }).addTo(map);
+
+            // 地名 tooltip：若该地点有影视取景信息，合并到标签
+            let tooltipText = attr.name;
+            if (filmInfo) tooltipText = attr.name + '  ' + filmInfo.split(' - ')[0];
+            marker.bindTooltip('<span class="name-label-inner">' + tooltipText + '</span>', {
+                permanent: true,
+                direction: 'top',
+                offset: [0, -14],
+                className: 'name-label'
+            });
+
+            const markerIndex = allMarkers.length;
+            const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(attr.name + ' 米兰 Milan')}`;
+            const popupContent = buildPopupContent(attr.name, attr.desc, typeNames[attr.type], markerColor, bingUrl, markerIndex, filmInfo);
+            marker.bindPopup(popupContent);
+
+            allMarkers.push({ marker, name: attr.name, desc: attr.desc, type: attr.type, color: markerColor, isCustom: false });
+
+            // 注册到分类层
+            if (!markerLayers[attr.type]) markerLayers[attr.type] = [];
+            markerLayers[attr.type].push(marker);
+        });
+
+        // 构建弹窗HTML
+        function buildPopupContent(name, desc, typeName, color, bingUrl, markerIndex, filmInfo) {
+            let extra = '';
+            if (filmInfo) {
+                extra = '<div style="margin-top:6px;color:#e91e63;font-size:12px;">' + filmInfo + '</div>';
+            }
+            return `
+                <div class="popup-title">${name}</div>
+                <div class="popup-desc">${desc}</div>
+                ${extra}
+                <span class="popup-type" style="background:${color}">${typeName}</span>
+                <br><br>
+                <a href="${bingUrl}" target="_blank" style="color:#0066cc;text-decoration:none;font-size:12px;">🔍 在Bing中搜索</a>
+                <br>
+                <a href="javascript:void(0)" onclick="openEditModal(${markerIndex})" style="color:#e74c3c;text-decoration:none;font-size:12px;">✏️ 编辑标记</a>
+            `;
+        }
+
+        // 筛选切换函数
+        function toggleFilter(type) {
+            filterState[type] = !filterState[type];
+            const btn = document.getElementById('filter-' + type);
+            if (btn) {
+                btn.style.opacity = filterState[type] ? '1' : '0.4';
+                btn.style.textDecoration = filterState[type] ? 'none' : 'line-through';
+            }
+            // 显示/隐藏对应类型的标记
+            if (markerLayers[type]) {
+                markerLayers[type].forEach(marker => {
+                    if (filterState[type]) {
+                        map.addLayer(marker);
+                    } else {
+                        map.removeLayer(marker);
+                    }
+                });
+            }
+        }
+
+        // 添加图例（带筛选功能）
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function() {
+            const div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = `
+                <h4>📍 景点分类（点击筛选）</h4>
+                <div class="legend-item filter-btn" id="filter-ancient" onclick="toggleFilter('ancient')" style="cursor:pointer;"><div class="legend-color" style="background:${colors.ancient}"></div>古典遗迹</div>
+                <div class="legend-item filter-btn" id="filter-church" onclick="toggleFilter('church')" style="cursor:pointer;"><div class="legend-color" style="background:${colors.church}"></div>教堂</div>
+                <div class="legend-item filter-btn" id="filter-square" onclick="toggleFilter('square')" style="cursor:pointer;"><div class="legend-color" style="background:${colors.square}"></div>广场喷泉</div>
+                <div class="legend-item filter-btn" id="filter-museum" onclick="toggleFilter('museum')" style="cursor:pointer;"><div class="legend-color" style="background:${colors.museum}"></div>博物馆</div>
+                <div class="legend-item filter-btn" id="filter-modern" onclick="toggleFilter('modern')" style="cursor:pointer;"><div class="legend-color" style="background:${colors.modern}"></div>近现代建筑</div>
+                <div class="legend-item filter-btn" id="filter-district" onclick="toggleFilter('district')" style="cursor:pointer;"><div class="legend-color" style="background:${colors.district}"></div>特色街区</div>
+                <div style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;" class="legend-item filter-btn" id="filter-film" onclick="toggleFilter('film')" style="cursor:pointer;"><div class="legend-color" style="background:${colors.film}"></div>🎬 影视取景地</div>
+                <div style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;" class="legend-item filter-btn" id="filter-master" onclick="toggleFilter('master')" style="cursor:pointer;"><div class="legend-color" style="background:${colors.master}"></div><b>⭐ 建筑大师作品</b></div>
+            `;
+            return div;
+        };
+        legend.addTo(map);
+
+        // ==================== 根据缩放/标记间距自动显示/隐藏地名标签 ====================
+        // 分级策略（更宽松的范围，让大地图视图也能看到地名）：
+        //   zoom <  10  → 一律隐藏
+        //   zoom 10-11 → 严格：平均间距 >= 220px
+        //   zoom 12-13 → 中等：平均间距 >= 130px
+        //   zoom 14-15 → 宽松：平均间距 >= 70px
+        //   zoom >= 16 → 直接显示所有可见标记
+
+        function updateLabelsVisibility() {
+            const zoom = map.getZoom();
+            let visible = false;
+
+            if (zoom >= 16) {
+                visible = true;
+            } else if (zoom >= 10) {
+                const bounds = map.getBounds();
+                const visibleMarkers = [];
+                for (let i = 0; i < allMarkers.length; i++) {
+                    const m = allMarkers[i].marker;
+                    if (!map.hasLayer(m)) continue;
+                    const ll = m.getLatLng();
+                    if (bounds.contains(ll)) visibleMarkers.push(ll);
+                }
+
+                if (visibleMarkers.length >= 2) {
+                    let totalDist = 0;
+                    let count = 0;
+                    const maxCheck = Math.min(visibleMarkers.length, 100);
+                    const sample = visibleMarkers.slice(0, maxCheck);
+                    for (let i = 0; i < sample.length; i++) {
+                        let minPx = Infinity;
+                        for (let j = 0; j < sample.length; j++) {
+                            if (i === j) continue;
+                            const p1 = map.latLngToContainerPoint(sample[i]);
+                            const p2 = map.latLngToContainerPoint(sample[j]);
+                            const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                            if (d < minPx) minPx = d;
+                        }
+                        if (isFinite(minPx)) {
+                            totalDist += minPx;
+                            count++;
+                        }
+                    }
+                    const avgGap = count > 0 ? totalDist / count : 0;
+                    let threshold;
+                    if (zoom >= 14) threshold = 70;
+                    else if (zoom >= 12) threshold = 130;
+                    else threshold = 220;
+                    if (avgGap >= threshold) visible = true;
+                } else if (visibleMarkers.length >= 1) {
+                    visible = true;
+                }
+            }
+
+            allMarkers.forEach(item => {
+                const m = item.marker;
+                const tooltipEl = m._tooltip && m._tooltip._container;
+                if (!tooltipEl) return;
+                if (visible && map.hasLayer(m)) {
+                    tooltipEl.classList.remove('hidden-label');
+                } else {
+                    tooltipEl.classList.add('hidden-label');
+                }
+            });
+        }
+
+        map.on('zoomend moveend', updateLabelsVisibility);
+        const origToggleFilter = window.toggleFilter;
+        window.toggleFilter = function(type) {
+            if (typeof origToggleFilter === 'function') origToggleFilter(type);
+            setTimeout(updateLabelsVisibility, 30);
+        };
+        setTimeout(updateLabelsVisibility, 100);
+
+        // ==================== 三栏自动隐藏功能 ====================
+        const titleOverlay = document.querySelector('.title-overlay');
+        const drawToolbar = document.getElementById('drawToolbar');
+        const legendEl = document.querySelector('.legend');
+
+        titleOverlay.addEventListener('click', function(e) {
+            if (this.classList.contains('collapsed')) {
+                this.classList.remove('collapsed');
+                e.stopPropagation();
+            }
+        });
+        drawToolbar.addEventListener('click', function(e) {
+            if (this.classList.contains('collapsed')) {
+                this.classList.remove('collapsed');
+                e.stopPropagation();
+            }
+        });
+        legendEl.addEventListener('click', function(e) {
+            if (this.classList.contains('collapsed')) {
+                this.classList.remove('collapsed');
+                e.stopPropagation();
+            }
+        });
+
+        map.on('click', function() {
+            titleOverlay.classList.add('collapsed');
+            drawToolbar.classList.add('collapsed');
+            legendEl.classList.add('collapsed');
+        });
+
+        map.on('popupopen', function() {
+            titleOverlay.classList.remove('collapsed');
+        });
+
+        [titleOverlay, drawToolbar, legendEl].forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+        });
+
+        // ==================== 自由划线工具 ====================
+        const canvas = document.getElementById('drawCanvas');
+        const ctx = canvas.getContext('2d');
+        let drawMode = false; // 是否处于绘图模式
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+        let drawHistory = []; // 撤销历史
+        let currentPath = null;
+
+        const drawSettings = {
+            color: '#e74c3c',
+            size: 3,
+            tool: 'pen' // 'pen' 或 'eraser'
+        };
+
+        // 初始化Canvas尺寸
+        function resizeCanvas() {
+            const mapEl = document.getElementById('map');
+            canvas.width = mapEl.clientWidth;
+            canvas.height = mapEl.clientHeight;
+            redrawAll();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        // 重绘所有历史路径
+        function redrawAll() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawHistory.forEach(path => {
+                if (path.points.length < 2) return;
+                ctx.beginPath();
+                ctx.strokeStyle = path.color;
+                ctx.lineWidth = path.size;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                if (path.tool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+                ctx.moveTo(path.points[0].x, path.points[0].y);
+                for (let i = 1; i < path.points.length; i++) {
+                    ctx.lineTo(path.points[i].x, path.points[i].y);
+                }
+                ctx.stroke();
+            });
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // 切换绘图模式
+        function toggleDrawMode() {
+            drawMode = !drawMode;
+            const btn = document.getElementById('btnToggleDraw');
+            const indicator = document.getElementById('modeIndicator');
+            if (drawMode) {
+                canvas.classList.add('active');
+                btn.classList.add('active');
+                btn.textContent = '🗺️ 地图';
+                indicator.style.display = 'block';
+                map.dragging.disable();
+                map.scrollWheelZoom.disable();
+                map.doubleClickZoom.disable();
+            } else {
+                canvas.classList.remove('active');
+                btn.classList.remove('active');
+                btn.textContent = '✏️ 绘图';
+                indicator.style.display = 'none';
+                map.dragging.enable();
+                map.scrollWheelZoom.enable();
+                map.doubleClickZoom.enable();
+            }
+        }
+
+        // 切换工具
+        function setTool(tool) {
+            drawSettings.tool = tool;
+            document.getElementById('btnPen').classList.toggle('active', tool === 'pen');
+            document.getElementById('btnEraser').classList.toggle('active', tool === 'eraser');
+            canvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+        }
+
+        // 撤销
+        function undoDraw() {
+            drawHistory.pop();
+            redrawAll();
+        }
+
+        // 清除全部
+        function clearDraw() {
+            drawHistory = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 绘图事件
+        canvas.addEventListener('mousedown', (e) => {
+            if (!drawMode) return;
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            currentPath = {
+                color: drawSettings.tool === 'eraser' ? '#000' : drawSettings.color,
+                size: drawSettings.tool === 'eraser' ? drawSettings.size * 4 : drawSettings.size,
+                tool: drawSettings.tool,
+                points: [{ x: lastX, y: lastY }]
+            };
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing || !drawMode) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            ctx.beginPath();
+            ctx.strokeStyle = drawSettings.tool === 'eraser' ? '#000' : drawSettings.color;
+            ctx.lineWidth = drawSettings.tool === 'eraser' ? drawSettings.size * 4 : drawSettings.size;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            if (drawSettings.tool === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+            }
+
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.globalCompositeOperation = 'source-over';
+
+            currentPath.points.push({ x, y });
+            lastX = x;
+            lastY = y;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (isDrawing && currentPath && currentPath.points.length > 1) {
+                drawHistory.push(currentPath);
+            }
+            isDrawing = false;
+            currentPath = null;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            if (isDrawing && currentPath && currentPath.points.length > 1) {
+                drawHistory.push(currentPath);
+            }
+            isDrawing = false;
+            currentPath = null;
+        });
+
+        // 触摸支持
+        canvas.addEventListener('touchstart', (e) => {
+            if (!drawMode) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            isDrawing = true;
+            lastX = touch.clientX - rect.left;
+            lastY = touch.clientY - rect.top;
+            currentPath = {
+                color: drawSettings.tool === 'eraser' ? '#000' : drawSettings.color,
+                size: drawSettings.tool === 'eraser' ? drawSettings.size * 4 : drawSettings.size,
+                tool: drawSettings.tool,
+                points: [{ x: lastX, y: lastY }]
+            };
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isDrawing || !drawMode) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+
+            ctx.beginPath();
+            ctx.strokeStyle = drawSettings.tool === 'eraser' ? '#000' : drawSettings.color;
+            ctx.lineWidth = drawSettings.tool === 'eraser' ? drawSettings.size * 4 : drawSettings.size;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            if (drawSettings.tool === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+            }
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.globalCompositeOperation = 'source-over';
+
+            currentPath.points.push({ x, y });
+            lastX = x;
+            lastY = y;
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => {
+            if (isDrawing && currentPath && currentPath.points.length > 1) {
+                drawHistory.push(currentPath);
+            }
+            isDrawing = false;
+            currentPath = null;
+        });
+
+        // ==================== 路径搜索功能 ====================
+        let routeMode = false;
+        let routePointA = null; // { lat, lng, name }
+        let routePointB = null;
+
+        function toggleRouteMode() {
+            routeMode = !routeMode;
+            const btn = document.getElementById('btnRoute');
+            const indicator = document.getElementById('modeIndicator');
+            // 退出其他模式
+            if (routeMode && addMarkerMode) toggleAddMarkerMode();
+            if (routeMode && drawMode) toggleDrawMode();
+
+            if (routeMode) {
+                routePointA = null;
+                routePointB = null;
+                btn.classList.add('active');
+                btn.textContent = '❌ 取消';
+                indicator.textContent = '🛤️ 路径搜索：请点击第一个地点（起点）';
+                indicator.style.display = 'block';
+                indicator.style.background = 'rgba(0,150,0,0.85)';
+                map.getContainer().style.cursor = 'pointer';
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = '🛤️ 搜索路径';
+                indicator.style.display = 'none';
+                map.getContainer().style.cursor = '';
+            }
+        }
+
+        // 监听标记点击，在路径模式下选择起终点
+        map.on('popupopen', function(e) {
+            if (!routeMode) return;
+            const popup = e.popup;
+            const latlng = popup.getLatLng();
+            // 从弹窗内容中提取名称
+            const titleEl = popup.getElement().querySelector('.popup-title');
+            const name = titleEl ? titleEl.textContent : '未知地点';
+
+            if (!routePointA) {
+                routePointA = { lat: latlng.lat, lng: latlng.lng, name };
+                document.getElementById('modeIndicator').textContent = '🛤️ 路径搜索：请点击第二个地点（终点）';
+            } else if (!routePointB) {
+                routePointB = { lat: latlng.lat, lng: latlng.lng, name };
+                // 打开Google Maps公共交通路线
+                const url = `https://www.google.com/maps/dir/?api=1&origin=${routePointA.lat},${routePointA.lng}&destination=${routePointB.lat},${routePointB.lng}&travelmode=transit`;
+                window.open(url, '_blank');
+                document.getElementById('modeIndicator').textContent = `✅ 已搜索: ${routePointA.name} → ${routePointB.name}`;
+                // 3秒后自动退出路径模式
+                setTimeout(() => {
+                    if (routeMode) toggleRouteMode();
+                }, 3000);
+            }
+        });
+
+        // ==================== 自定义标记功能 ====================
+        let addMarkerMode = false;
+        let tempMarkerLatLng = null;
+        let editingMarkerIndex = -1;
+
+        // 切换添加标记模式
+        function toggleAddMarkerMode() {
+            addMarkerMode = !addMarkerMode;
+            const btn = document.getElementById('btnAddMarker');
+            const indicator = document.getElementById('modeIndicator');
+            if (addMarkerMode) {
+                btn.classList.add('active');
+                btn.textContent = '🗺️ 完成';
+                indicator.textContent = '📍 点击地图任意位置添加标记';
+                indicator.style.display = 'block';
+                indicator.style.background = 'rgba(52,152,219,0.9)';
+                map.getContainer().style.cursor = 'crosshair';
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = '📍 添加标记';
+                indicator.style.display = 'none';
+                map.getContainer().style.cursor = '';
+            }
+        }
+
+        // 地图点击添加标记
+        map.on('click', function(e) {
+            if (!addMarkerMode) return;
+            tempMarkerLatLng = e.latlng;
+            document.getElementById('markerName').value = '';
+            document.getElementById('markerDesc').value = '';
+            document.getElementById('markerModal').classList.add('active');
+        });
+
+        // 关闭添加弹窗
+        function closeMarkerModal() {
+            document.getElementById('markerModal').classList.remove('active');
+            tempMarkerLatLng = null;
+        }
+
+        // 保存自定义标记
+        function saveCustomMarker() {
+            const name = document.getElementById('markerName').value.trim();
+            const desc = document.getElementById('markerDesc').value.trim();
+            if (!name) { alert('请输入标记名称'); return; }
+            if (!tempMarkerLatLng) return;
+
+            const markerColor = '#ff9800';
+            const marker = L.circleMarker([tempMarkerLatLng.lat, tempMarkerLatLng.lng], {
+                radius: 10,
+                fillColor: markerColor,
+                color: '#fff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.9
+            }).addTo(map);
+
+            marker.bindTooltip(`<span class="name-label-inner">${name}</span>`, {
+                permanent: true,
+                direction: 'top',
+                offset: [0, -14],
+                className: 'name-label'
+            });
+
+            const markerIndex = allMarkers.length;
+            const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(name + ' 米兰 Milan')}`;
+            const popupContent = buildPopupContent(name, desc || '自定义标记', '📍 自定义', markerColor, bingUrl, markerIndex);
+            marker.bindPopup(popupContent);
+
+            allMarkers.push({ marker, name, desc: desc || '自定义标记', type: 'custom', color: markerColor, isCustom: true });
+            closeMarkerModal();
+        }
+
+        // ==================== 统一编辑/删除功能 ====================
+
+        // 打开编辑弹窗（所有标记通用）
+        function openEditModal(index) {
+            editingMarkerIndex = index;
+            const m = allMarkers[index];
+            if (!m) return;
+            document.getElementById('editMarkerName').value = m.name;
+            document.getElementById('editMarkerDesc').value = m.desc;
+            document.getElementById('editMarkerColor').value = m.color;
+            document.getElementById('editMarkerModal').classList.add('active');
+            map.closePopup();
+        }
+
+        // 关闭编辑弹窗
+        function closeEditMarkerModal() {
+            document.getElementById('editMarkerModal').classList.remove('active');
+            editingMarkerIndex = -1;
+        }
+
+        // 更新标记（名称、描述、颜色）
+        function updateAnyMarker() {
+            if (editingMarkerIndex < 0) return;
+            const name = document.getElementById('editMarkerName').value.trim();
+            const desc = document.getElementById('editMarkerDesc').value.trim();
+            const color = document.getElementById('editMarkerColor').value;
+            if (!name) { alert('请输入标记名称'); return; }
+
+            const m = allMarkers[editingMarkerIndex];
+            m.name = name;
+            m.desc = desc;
+            m.color = color;
+
+            // 更新标记颜色
+            m.marker.setStyle({ fillColor: color });
+
+            // 更新弹窗内容
+            const typeName = m.isCustom ? '📍 自定义' : (typeNames[m.type] || '自定义');
+            const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(name + ' 米兰 Milan')}`;
+            const popupContent = buildPopupContent(name, desc, typeName, color, bingUrl, editingMarkerIndex);
+            m.marker.setPopupContent(popupContent);
+
+            closeEditMarkerModal();
+        }
+
+        // 删除标记（所有标记通用）
+        function deleteAnyMarker() {
+            if (editingMarkerIndex < 0) return;
+            if (!confirm('确定要删除标记"' + allMarkers[editingMarkerIndex].name + '"吗？')) return;
+
+            const m = allMarkers[editingMarkerIndex];
+            map.removeLayer(m.marker);
+            allMarkers.splice(editingMarkerIndex, 1);
+
+            // 重建所有弹窗中的索引引用
+            allMarkers.forEach((item, i) => {
+                const typeName = item.isCustom ? '📍 自定义' : (typeNames[item.type] || '自定义');
+                const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(item.name + ' 米兰 Milan')}`;
+                const popupContent = buildPopupContent(item.name, item.desc, typeName, item.color, bingUrl, i);
+                item.marker.setPopupContent(popupContent);
+            });
+
+            closeEditMarkerModal();
+        }
+
+        // 点击弹窗外部关闭
+        document.getElementById('markerModal').addEventListener('click', function(e) {
+            if (e.target === this) closeMarkerModal();
+        });
+        document.getElementById('editMarkerModal').addEventListener('click', function(e) {
+            if (e.target === this) closeEditMarkerModal();
+        });
+
+        // 按Enter保存
+        document.getElementById('markerName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') saveCustomMarker();
+        });
+        document.getElementById('editMarkerName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') updateAnyMarker();
+        });
+    </script>
+</body>
+</html>
