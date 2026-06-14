@@ -41,7 +41,7 @@
             filter: saturate(1.02) contrast(1.02);
         }
 
-        /* ===== 顶部标题栏 ===== */
+                /* ===== 顶部标题栏 ===== */
         .title-overlay {
             position: absolute;
             top: 20px;
@@ -50,38 +50,28 @@
             background: rgba(255, 255, 255, 0.96);
             backdrop-filter: blur(14px);
             -webkit-backdrop-filter: blur(14px);
-            padding: 14px 32px 12px;
-            border-radius: 50px;
+            padding: 10px 36px;
+            border-radius: 40px;
             box-shadow: var(--ombra);
             z-index: 1000;
             text-align: center;
-            overflow: hidden;
-            border: 1px solid rgba(212, 168, 83, 0.25);
+            border: 1px solid rgba(212, 168, 83, 0.3);
             transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            max-width: 92vw;
         }
         .title-overlay:hover {
             box-shadow: 0 6px 32px rgba(30, 20, 10, 0.18);
             transform: translateX(-50%) translateY(-1px);
         }
         .title-overlay h1 {
-            font-family: 'Playfair Display', 'Noto Serif SC', serif;
-            font-size: 22px;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 20px;
             font-weight: 700;
             color: var(--rosso);
-            margin-bottom: 3px;
-            letter-spacing: 0.5px;
-        }
-        .title-overlay p {
-            font-size: 12px;
-            color: var(--testo-light);
-            font-style: italic;
-            font-family: 'Playfair Display', serif;
-            letter-spacing: 0.5px;
+            margin: 0;
+            letter-spacing: 2px;
         }
 
-        /* 三按钮收缩态：信息、工具、筛选 */
-        .title-overlay.collapsed,
+        /* 两按钮收缩态：工具(圆环)、筛选(方环) */
         .draw-toolbar.collapsed,
         .legend.collapsed {
             position: fixed;
@@ -89,55 +79,39 @@
             width: 44px;
             height: 44px;
             padding: 0;
-            border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: var(--bianco);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            border: 1px solid rgba(212, 168, 83, 0.35);
-            box-shadow: var(--ombra);
-            transform: translate(0, 0);
-            overflow: hidden;
             z-index: 1000;
         }
-        .title-overlay.collapsed { top: calc(50% - 66px); }
-        .draw-toolbar.collapsed { top: 50%; transform: translateY(-50%); }
-        .legend.collapsed { top: calc(50% + 66px); }
+        .draw-toolbar.collapsed { top: calc(50% - 44px); transform: translateY(-50%); }
+        .legend.collapsed { top: calc(50% + 44px); transform: translateY(-50%); }
 
-        .title-overlay.collapsed h1,
-        .title-overlay.collapsed p,
         .draw-toolbar.collapsed .tool-row,
         .legend.collapsed h4,
         .legend.collapsed .legend-item { display: none; }
 
-        .title-overlay.collapsed::after,
-        .draw-toolbar.collapsed::after,
-        .legend.collapsed::after {
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--rosso);
-            line-height: 1;
-            font-family: 'Noto Serif SC', serif;
-            letter-spacing: 0.5px;
+        .draw-toolbar.collapsed::before {
+            content: '';
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--rosso);
+            border-radius: 50%;
         }
-        .title-overlay.collapsed::after { content: '信息'; }
-        .draw-toolbar.collapsed::after { content: '工具'; }
-        .legend.collapsed::after { content: '筛选'; }
+        .legend.collapsed::before {
+            content: '';
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--rosso);
+            border-radius: 3px;
+        }
 
-        .title-overlay.collapsed:hover,
         .draw-toolbar.collapsed:hover,
         .legend.collapsed:hover {
-            transform: translateY(0) scale(1.08);
-            box-shadow: 0 6px 20px rgba(192, 57, 43, 0.22);
+            opacity: 0.7;
         }
-        .title-overlay.collapsed:hover { transform: translateY(0) scale(1.08); }
-        .draw-toolbar.collapsed:hover { transform: translateY(-50%) scale(1.08) !important; }
-        .legend.collapsed:hover { transform: translateY(0) scale(1.08); }
-
-        /* ===== 左侧工具栏（展开） ===== */
+/* ===== 左侧工具栏（展开） ===== */
         .draw-toolbar {
             position: fixed;
             top: 80px;
@@ -509,24 +483,29 @@
            iPhone 14 (390 x 844) 响应式适配
            ============================================================ */
         @media (max-width: 430px) {
-            .title-overlay {
-                padding: 10px 20px 8px;
-                border-radius: 40px;
+                        .title-overlay {
+                padding: 8px 24px;
+                border-radius: 30px;
                 top: 12px;
                 max-width: calc(100vw - 24px);
             }
-            .title-overlay h1 { font-size: 16px; margin-bottom: 2px; }
-            .title-overlay p { font-size: 10px; line-height: 1.3; max-width: 80vw; }
-            .title-overlay.collapsed {
-                width: 42px;
-                height: 42px;
-                top: calc(50% - 56px);
+            .title-overlay h1 {
+                font-size: 16px;
+                letter-spacing: 1.5px;
             }
 
-            .draw-toolbar.collapsed { width: 42px; height: 42px; top: 50%; }
-            .legend.collapsed { width: 42px; height: 42px; top: calc(50% + 56px); }
-
-            .draw-toolbar {
+            /* 两按钮：垂直居中对齐 */
+            .draw-toolbar.collapsed {
+                width: 42px;
+                height: 42px;
+                top: calc(50% - 42px);
+            }
+            .legend.collapsed {
+                width: 42px;
+                height: 42px;
+                top: calc(50% + 42px);
+            }
+.draw-toolbar {
                 top: auto;
                 bottom: 88px;
                 left: 10px;
@@ -590,10 +569,7 @@
 </style>
 </head>
 <body>
-    <div class="title-overlay">
-        <h1>🎨 佛罗伦萨必去景点地图</h1>
-        <p>OpenStreetMap底图 | 包含文艺复兴建筑、教堂、广场、博物馆、美第奇家族建筑、影视取景地</p>
-    </div>
+    <div class="title-overlay"><h1>佛罗伦萨</h1></div>
     <div class="mode-indicator" id="modeIndicator">✏️ 绘图模式 - 点击工具栏关闭后恢复地图模式</div>
 
     <!-- 划线工具栏 -->
@@ -990,17 +966,11 @@
         };
         setTimeout(updateLabelsVisibility, 100);
 
-        // ==================== 三栏自动隐藏功能 ====================
-        const titleOverlay = document.querySelector('.title-overlay');
+                // ==================== 面板自动隐藏功能 ====================
         const drawToolbar = document.getElementById('drawToolbar');
         const legendEl = document.querySelector('.legend');
 
-        titleOverlay.addEventListener('click', function(e) {
-            if (this.classList.contains('collapsed')) {
-                this.classList.remove('collapsed');
-                e.stopPropagation();
-            }
-        });
+        // 点击圆形展开
         drawToolbar.addEventListener('click', function(e) {
             if (this.classList.contains('collapsed')) {
                 this.classList.remove('collapsed');
@@ -1014,22 +984,18 @@
             }
         });
 
+        // 点击地图区域自动收起面板
         map.on('click', function() {
-            titleOverlay.classList.add('collapsed');
             drawToolbar.classList.add('collapsed');
             legendEl.classList.add('collapsed');
         });
 
-        map.on('popupopen', function() {
-            titleOverlay.classList.remove('collapsed');
-        });
-
-        [titleOverlay, drawToolbar, legendEl].forEach(el => {
+        // 防止面板内部点击冒泡导致收起
+        [drawToolbar, legendEl].forEach(el => {
             el.addEventListener('click', function(e) {
                 e.stopPropagation();
             });
         });
-
         // ==================== 自由划线工具 ====================
         const canvas = document.getElementById('drawCanvas');
         const ctx = canvas.getContext('2d');
